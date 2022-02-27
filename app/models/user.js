@@ -10,9 +10,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  isAdmin: {
+  isAdmin: {// for A&A to view db remotely
     type: Boolean,
     required: false
+  },
+  isRsvped: {
+    type: Boolean,
+    required: true
   },
   token: String
 }, {
@@ -21,7 +25,6 @@ const userSchema = new mongoose.Schema({
     // remove `hashedPassword` field when we call `.toObject`
     transform: (_doc, user) => {
       delete user.hashedPassword
-      delete user.isAdmin
       return user
     }
   }
