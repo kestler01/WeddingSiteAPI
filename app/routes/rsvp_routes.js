@@ -24,7 +24,9 @@ const router = express.Router()
 // pull in Mongoose models
 const User = require('../models/user') // to update isRsvped
 const Rsvp = require('../models/rsvp.js')
+// const mongoose = require('mongoose')
 const requireAdmin = customErrors.requireAdmin
+
 /// ////////////////////////////////////////////
 
 // get index of all rsvps
@@ -32,7 +34,9 @@ const requireAdmin = customErrors.requireAdmin
 router.get('/rsvps', requireToken, (req, res, next) => {
   Rsvp.find()
     .then((rsvps) => {
-      requireAdmin(req, rsvps)
+      requireAdmin(req, rsvps) // req body needs to contain user object with isAdmin=true will return the 2nd arg if true
+      console.log(rsvps)
+      return (rsvps)
     })
     .then((rsvps) => {
       // `rsvps` will be an array of Mongoose documents
@@ -48,16 +52,15 @@ router.get('/rsvps', requireToken, (req, res, next) => {
 
 // get user's rsvp
 // a user should only be able to view their own rsvp
-router.get('/rsvp/:id', requireToken, (req, res, next) => {
-  delete req.body.example.owner
-  Rsvp.findById(req.params.id)
+router.get('/rsvp', requireToken, (req, res, next) => {
+  Rsvp.find({owner: req.user.id})
     .then(handle404)
     .then((rsvp) => {
-      // pass the `req` object and the Mongoose record to `requireOwnership`
-      // it will throw an error if the current user isn't the owner
-      requireOwnership(req, rsvp)
-
-      // pass the result of Mongoose's `.update` to the next `.then`
+      // requireOwnership(req, rsvp) shouldn't be necessary since we are using the user to get the rsvp they own already
+      // address teh test environment edge case of multiple rsvps
+      if (Array.isArray(rsvp)) {
+        rsvp = rsvp[0]
+      }
       return rsvp
     })
     .then(rsvp => res.status(200).json({ rsvp: rsvp.toObject() }))
@@ -65,51 +68,76 @@ router.get('/rsvp/:id', requireToken, (req, res, next) => {
 })
 
 // make a new rsvp
-router.post('/rsvps', requireToken, (req, res, next) => {
+router.post('/rsvp', requireToken, async (req, res, next) => {
   // set owner of new rsvp to be current user
   req.body.rsvp.owner = req.user.id
-
-  let temp = User.findById(req.user.id)
-  temp.isRsvped = true
-
+  console.log(req.user.id)
   Rsvp.create(req.body.rsvp)
   // respond to successful `create` with status 201 and JSON of new "rsvp"
-    .then((rsvp) => {
-      console.log(rsvp)
-      console.log(temp)
-      User.save(temp)
-      return (rsvp)
+    // .then((rsvp) => {
+    //   // console.log(rsvp)
+    //   // console.log(user)
+    //   // return user.save()
+    // })
+    .then(() => { return User.findById(req.user.id) })// *
+    .then((user) => {
+      user.isRsvped = true
+      return user.save()
     })
-    .then((rsvp) => {
-      res.status(201).json({ rsvp: rsvp.toObject() })
+    .then((user) => {
+      // console.log(user)
+      // console.log('about to send status')
+      res.sendStatus(201)// .json({ user: user.toObject() })// can cut this part of the response since the client already has all the data, after a 201 it should update directly without the json object bloat
     })
     .catch(next)
 })
 
 // update a rsvp
-router.patch('/rsvp/:id', requireToken, (req, res, next) => {
+router.patch('/rsvp', requireToken, (req, res, next) => {
   // to stop a user from changing the owner of the rsvp by adding a new owner property we will remove it
   delete req.body.rsvp.owner
-
-  Rsvp.findById(req.params.id)
+  // console.log(req.user)
+  Rsvp.find({ owner: req.user.id })
+    .then((rsvp) => {
+      // console.log(rsvp)// RSVP IS an array!
+      if (Array.isArray(rsvp)) {
+        // if we there are multiple rsvps for a user (which should never happen) get only the first one
+        rsvp = rsvp[0]
+      }
+      return rsvp
+    })
     .then(handle404)
     .then(rsvp => {
-      requireOwnership(req, rsvp)
+      console.log('rsvp.owner?', rsvp) // undefined?
+      // const owner = resource.owner._id ? resource.owner._id : resource.owner
+      console.log(req.user)
+      console.log(req.body.rsvp)
+      // requireOwnership(req, rsvp)
       return rsvp.updateOne(req.body.rsvp)
     })
-    .then(() => res.Status(204).json({ rsvp: rsvp.toObject() }))
+    .then(() => res.sendStatus(204)) // .json({ rsvp: rsvp.toObject() }))can cut this part of the response since the client already has all the data, after a 201 it should update directly without the json object bloat
+    .catch(next)
 })
 
 // delete an rsvp
-router.delete('/rsvp/:id', requireToken, (req, res, next) => {
-  Rsvp.findById(req.params.id)
+router.delete('/rsvp', requireToken, (req, res, next) => {
+  Rsvp.find({ owner: req.user.id })
     .then(handle404)
-    .then(rsvp => {
-      requireOwnership(req, rsvp)
+    .then((rsvp) => {
+      if (Array.isArray(rsvp)) { // to address dev edge case where we have a test user that has many rsvps, which shouldn't happen in dev
+        rsvp = rsvp[0]
+      }
+      return rsvp
+    })
+    .then((rsvp) => {
+      // requireOwnership(req, rsvp)
       rsvp.deleteOne()
-      let temp = User.findById(req.user.id)
-      temp.isRsvped = false
-      User.save(temp)
+    })
+    // return user.save()
+    .then(() => { return User.findById(req.user.id) })
+    .then((user) => {
+      user.isRsvped = false
+      return user.save()
     })
     .then(() => res.sendStatus(204))
     .catch(next)
