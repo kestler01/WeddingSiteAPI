@@ -15,8 +15,7 @@ const rsvpSchema = new mongoose.Schema(
       required: true
     },
     Notes: {
-      type: String,
-      required: true
+      type: String
     },
     owner: {
       type: mongoose.Schema.Types.ObjectId,

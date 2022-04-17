@@ -72,9 +72,9 @@ router.post('/rsvp', requireToken, async (req, res, next) => {
   // set owner of new rsvp to be current user
   req.body.rsvp.owner = req.user.id
   console.log(req.user.id)
-  if (!req.body.rsvp.notes || req.body.rsvp.notes === '') {
-    req.body.rsvp.notes = 'no added notes'
-  }
+  // if (!req.body.rsvp.notes || req.body.rsvp.notes === '') {
+  //   req.body.rsvp.notes = 'no added notes'
+  // } potential fix for required notes field- trying change on model first
   Rsvp.create(req.body.rsvp)
   // respond to successful `create` with status 201 and JSON of new "rsvp"
     // .then((rsvp) => {
